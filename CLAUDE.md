@@ -11,6 +11,9 @@ source .venv/bin/activate
 uv pip install -r requirements-dev.txt
 ```
 
+`tests/test_browser.py` drives the page in Chromium with Playwright. If Chromium is
+missing, run `playwright install chromium` once; without it those tests are skipped.
+
 ## Checks
 
 Run all of these before committing; each must pass with no errors:

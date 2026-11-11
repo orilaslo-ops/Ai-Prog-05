@@ -1,3 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.coverage.run]
+# Playwright runs the browser tests in greenlets; the server runs in threads.
+concurrency = ["greenlet", "thread"]

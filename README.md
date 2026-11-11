@@ -67,6 +67,7 @@ the file too and raise the version.
 - `session.py`: game actions, the opponent, displayed move notation, and sidebar information.
 - `computer.py`: the computer opponent.
 - `server.py`: one in-memory game, HTTP actions, and static files. Restarting loses the game.
+  Each connection has its own thread; a lock lets one request at a time use the game.
 - `static/`: browser presentation and square selection. All movement decisions run in Python.
 - `tests/`: starter behavior checks.
 

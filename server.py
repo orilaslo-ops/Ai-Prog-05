@@ -2,7 +2,8 @@
 
 import argparse
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -11,8 +12,12 @@ from session import Session
 STATIC = Path(__file__).parent / "static"
 
 
-def make_server(port: int = 8000) -> HTTPServer:
+def make_server(port: int = 8000) -> ThreadingHTTPServer:
     session = Session()
+    # Each connection gets its own thread, so an idle one (such as a browser
+    # preconnect) cannot hold up the others. The lock lets one request at a time
+    # read or change the game.
+    lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
         def respond(self, code: int, body: bytes, content_type: str) -> None:
@@ -28,7 +33,9 @@ def make_server(port: int = 8000) -> HTTPServer:
 
         def do_GET(self) -> None:
             if self.path == "/api/state":
-                self.send_json(200, session.view())
+                with lock:
+                    state = json.dumps(session.view()).encode()
+                self.respond(200, state, "application/json")
                 return
             routes = {
                 "/": ("index.html", "text/html; charset=utf-8"),
@@ -52,13 +59,14 @@ def make_server(port: int = 8000) -> HTTPServer:
                 action = json.loads(self.rfile.read(size))
                 if not isinstance(action, dict):
                     raise TypeError("Expected an action object")
-                result = session.dispatch(action)
+                with lock:
+                    result = json.dumps(session.dispatch(action)).encode()
             except (ValueError, TypeError) as error:
                 self.send_json(400, {"error": str(error)})
                 return
-            self.send_json(200, result)
+            self.respond(200, result, "application/json")
 
-    return HTTPServer(("127.0.0.1", port), Handler)
+    return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
 if __name__ == "__main__":

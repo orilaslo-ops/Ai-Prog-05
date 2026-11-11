@@ -2,3 +2,4 @@ pytest
 ruff
 mypy
 pytest-cov
+playwright==1.47.0
