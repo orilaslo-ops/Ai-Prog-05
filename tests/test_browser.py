@@ -133,3 +133,36 @@ def test_loading_a_bad_file_shows_an_error_and_keeps_the_board(
     )
     assert moves(page) == ["e2-e4"]
     assert square(page, "e4").get_attribute("aria-label") == "e4 White pawn"
+
+
+def press(page: Any, key: str, code: str, shift: bool = False) -> None:
+    """Dispatch a Ctrl shortcut with the given key text, as another layout would send it."""
+    page.evaluate(
+        "([key, code, shift]) => document.dispatchEvent(new KeyboardEvent('keydown',"
+        " {key, code, ctrlKey: true, shiftKey: shift, bubbles: true}))",
+        [key, code, shift],
+    )
+
+
+def test_redo_button_and_shortcuts(page: Any) -> None:
+    redo_button = page.locator("#redo")
+    assert redo_button.is_disabled()
+    click_move(page, "e2e4")
+    page.wait_for_function("document.querySelectorAll('#moves span').length == 1")
+    page.locator("#undo").click()
+    page.wait_for_function("document.querySelectorAll('#moves span').length == 0")
+    assert redo_button.is_enabled()
+    redo_button.click()
+    page.wait_for_function("document.querySelectorAll('#moves span').length == 1")
+    assert redo_button.is_disabled()
+    assert square(page, "e4").get_attribute("aria-label") == "e4 White pawn"
+    # Ctrl+Y and Ctrl+Shift+Z, with a Hebrew layout (key "ט" / "ז") as well.
+    for key, code, shift in (
+        ("y", "KeyY", False),
+        ("ט", "KeyY", False),
+        ("ז", "KeyZ", True),
+    ):
+        press(page, "ז", "KeyZ")
+        page.wait_for_function("document.querySelectorAll('#moves span').length == 0")
+        press(page, key, code, shift)
+        page.wait_for_function("document.querySelectorAll('#moves span').length == 1")
