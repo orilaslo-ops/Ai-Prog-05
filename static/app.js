@@ -90,6 +90,7 @@ function render() {
     }
     return item;
   }));
+  document.querySelector('#undo').disabled = !state.can_undo;
   document.querySelector('#captured-panel').hidden = !Object.hasOwn(state, 'captured');
   const captured = state.captured || [];
   document.querySelector('#captured').replaceChildren(...captured.map(pieceGlyph));
@@ -149,6 +150,14 @@ document.querySelector('#controls').onclick = async event => {
   } catch (error) { message.textContent = error.message; }
   finally { busy = false; }
 };
+
+// Ctrl+Z (Cmd+Z on a Mac) presses Undo; a disabled button ignores the click.
+document.addEventListener('keydown', event => {
+  if (event.key.toLowerCase() !== 'z' || !(event.ctrlKey || event.metaKey)
+      || event.shiftKey || event.altKey || event.repeat) return;
+  event.preventDefault();
+  document.querySelector('#undo').click();
+});
 
 try {
   const response = await fetch('/api/state');

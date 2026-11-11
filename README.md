@@ -29,6 +29,17 @@ To reach promotion quickly from a new game, play a2-a4, h7-h5, a4-a5, h5-h4, a5-
 h4-h3, a6-b7, h3-g2. White can then play b7 to a8. In tests, the `promotion-setup` action
 plays the same moves.
 
+## Undo
+
+**Undo last move** (or Ctrl+Z) takes back the most recent move, restoring the board, any captured piece,
+the side to move and the move list. At the start of a game it does nothing. Against the
+computer it takes back moves until it is White's turn again, so your move and the
+computer's reply are undone together.
+
+Shared game information: `Session.history` is a list of positions. `history[0]` is the
+starting position and `history[i + 1]` is the position after `notation[i]`. Save/load should
+store `history`, `notation` and `opponent`; redo can keep the positions that undo removes.
+
 ## Files
 
 - `game.py`: board and turn in a position list; movement, check, checkmate and stalemate.
