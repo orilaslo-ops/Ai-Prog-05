@@ -2,6 +2,7 @@
 
 from computer import choose_move
 from game import (
+    copy_position,
     legal_moves,
     move,
     new_position,
@@ -27,10 +28,24 @@ class Session:
         self.position = new_position()
         self.notation = []
         self.opponent = opponent
+        # Shared game information: history[0] is the start and history[i + 1] is the
+        # position after notation[i]. Undo, redo and save/load all build on this list.
+        self.history = [copy_position(self.position)]
 
     def play(self, source, target):
         label = move(self.position, source, target)
         self.notation.append(label)
+        self.history.append(copy_position(self.position))
+        self.after_move()
+
+    def undo(self):
+        """Take back the last move. Against the computer, return to White's turn."""
+        while len(self.history) > 1:
+            self.history.pop()
+            self.notation.pop()
+            if self.opponent != "computer" or self.history[-1][1] == "w":
+                break
+        self.position = copy_position(self.history[-1])
         self.after_move()
 
     def after_move(self):
@@ -44,6 +59,7 @@ class Session:
             "opponent": self.opponent,
             "status": status(self.position),
             "winner": winner(self.position),
+            "can_undo": len(self.history) > 1,
             **self.sidebar(),
         }
 
@@ -72,6 +88,8 @@ class Session:
             self.__init__()
             for source, target in PROMOTION_SETUP:
                 self.play(source, target)
+        elif command == "undo":
+            self.undo()
         else:
             raise ValueError("Unknown action")
         return self.view()
