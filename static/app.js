@@ -91,6 +91,7 @@ function render() {
     return item;
   }));
   document.querySelector('#undo').disabled = !state.can_undo;
+  document.querySelector('#redo').disabled = !state.can_redo;
   document.querySelector('#captured-panel').hidden = !Object.hasOwn(state, 'captured');
   const captured = state.captured || [];
   document.querySelector('#captured').replaceChildren(...captured.map(pieceGlyph));
@@ -163,6 +164,8 @@ document.querySelector('#controls').onclick = async event => {
     state = await request({action: button.dataset.action, opponent: button.dataset.opponent});
     selected = null; targets = [];
     message.textContent = ''; render();
+    // Redo can stop on the computer's turn (if the player undid before it replied).
+    await computerReply();
   } catch (error) { message.textContent = error.message; }
   finally { busy = false; }
 };
@@ -177,6 +180,16 @@ document.addEventListener('keydown', event => {
       || event.shiftKey || event.altKey || event.repeat) return;
   event.preventDefault();
   document.querySelector('#undo').click();
+});
+
+// Ctrl+Y or Ctrl+Shift+Z (Cmd on a Mac) presses Redo; event.code works with any layout.
+document.addEventListener('keydown', event => {
+  const y = event.code === 'KeyY' || event.key.toLowerCase() === 'y';
+  const z = event.code === 'KeyZ' || event.key.toLowerCase() === 'z';
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.repeat
+      || !((y && !event.shiftKey) || (z && event.shiftKey))) return;
+  event.preventDefault();
+  document.querySelector('#redo').click();
 });
 
 // Save downloads the game as a JSON file; load sends a chosen file back to the server,

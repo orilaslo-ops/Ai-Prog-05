@@ -40,6 +40,15 @@ Shared game information: `Session.history` is a list of positions. `history[0]` 
 starting position and `history[i + 1]` is the position after `notation[i]`. Save/load should
 store `history`, `notation` and `opponent`; redo can keep the positions that undo removes.
 
+## Redo
+
+**Redo** (Ctrl+Y or Ctrl+Shift+Z) plays again the move that Undo took back, exactly as it
+was played: captures, the chosen promotion piece, the notation and the captured-pieces
+display all come back. Against the computer it restores your move and the computer's same
+reply; nothing is chosen again. Any new move discards the moves waiting to be redone, and
+a new game clears both undo and redo. Undone moves are kept in `Session.undone` and saved
+with the game. The agreed outcomes are in `lab-notes/redo-spec.md`.
+
 ## Saving and loading
 
 **Save game** downloads the current game as a `.save.json` file; **Load game** opens one and
@@ -48,18 +57,19 @@ file is versioned JSON holding `Session.history` and `Session.notation`, so move
 before saving can still be undone after loading:
 
 ```json
-{"format": "chess-workshop-save", "version": 1, "opponent": "computer",
+{"format": "chess-workshop-save", "version": 2, "opponent": "computer",
  "notation": ["e2-e4"],
  "history": [{"board": {"e2": "wP", "...": "..."}, "turn": "w"},
-             {"board": {"e4": "wP", "...": "..."}, "turn": "b"}]}
+             {"board": {"e4": "wP", "...": "..."}, "turn": "b"}],
+ "redo": [{"board": {"e5": "bP", "...": "..."}, "turn": "w", "notation": "e7-e5"}]}
 ```
 
 Loading checks that the history starts at the starting position and that each position
 follows from the one before by the legal move named in `notation`. An unreadable, illegal
 or inconsistent file is rejected and the current game stays as it was. In Python,
 `Session.save_data()` / `Session.from_save(data)` and `save_file(session, path)` /
-`load_file(path)` in `session.py` do the same. When redo is added, store its positions in
-the file too and raise the version.
+`load_file(path)` in `session.py` do the same. `redo` holds the undone moves, next one
+first, and is checked the same way. Version 1 files (without `redo`) still load.
 
 ## Files
 

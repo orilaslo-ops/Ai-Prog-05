@@ -33,14 +33,16 @@ PROMOTION_SETUP = [
 ]
 
 # A saved game is a JSON object (see README, "Saving and loading"):
-#   {"format": "chess-workshop-save", "version": 1, "opponent": "human" | "computer",
+#   {"format": "chess-workshop-save", "version": 2, "opponent": "human" | "computer",
 #    "notation": ["e2-e4", ...],
-#    "history": [{"board": {"e2": "wP", ...}, "turn": "w"}, ...]}
+#    "history": [{"board": {"e2": "wP", ...}, "turn": "w"}, ...],
+#    "redo": [{"board": {...}, "turn": "b", "notation": "e7-e5"}, ...]}
 # "history" and "notation" are Session.history and Session.notation, so undo works
-# after loading. Loading checks that each position follows from the one before by the
-# legal move named in "notation".
+# after loading; "redo" is Session.undone, next move first, so redo works too.
+# Loading checks that each position follows from the one before by the legal move
+# named in its notation. Version 1 files have no "redo".
 SAVE_FORMAT = "chess-workshop-save"
-SAVE_VERSION = 1
+SAVE_VERSION = 2
 PIECES = {side + kind for side in "wb" for kind in "KQRBNP"}
 
 
@@ -55,19 +57,35 @@ class Session:
         # Shared game information: history[0] is the start and history[i + 1] is the
         # position after notation[i]. Undo, redo and save/load all build on this list.
         self.history = [copy_position(self.position)]
+        # Moves taken back by undo, as (position after the move, its notation); the
+        # next one to redo is last. Redo puts them back exactly as they were played.
+        self.undone: list[tuple[Position, str]] = []
 
     def play(self, source: str, target: str, promotion: str | None = None) -> None:
         label = move(self.position, source, target, promotion)
         self.notation.append(label)
         self.history.append(copy_position(self.position))
+        # A new move starts a new continuation, so the undone moves are gone.
+        self.undone = []
         self.after_move()
 
     def undo(self) -> None:
         """Take back the last move. Against the computer, return to White's turn."""
         while len(self.history) > 1:
-            self.history.pop()
-            self.notation.pop()
+            self.undone.append((self.history.pop(), self.notation.pop()))
             if self.opponent != "computer" or self.history[-1][1] == "w":
+                break
+        self.position = copy_position(self.history[-1])
+        self.after_move()
+
+    def redo(self) -> None:
+        """Play again what undo took back: one move, or against the computer the
+        player's move and the computer's same reply."""
+        while self.undone:
+            position, label = self.undone.pop()
+            self.history.append(position)
+            self.notation.append(label)
+            if self.opponent != "computer" or position[1] == "w":
                 break
         self.position = copy_position(self.history[-1])
         self.after_move()
@@ -84,6 +102,7 @@ class Session:
             "status": status(self.position),
             "winner": winner(self.position),
             "can_undo": len(self.history) > 1,
+            "can_redo": bool(self.undone),
             **self.sidebar(),
         }
 
@@ -97,6 +116,10 @@ class Session:
             "history": [
                 {"board": dict(board), "turn": turn} for board, turn in self.history
             ],
+            "redo": [
+                {"board": dict(board), "turn": turn, "notation": label}
+                for (board, turn), label in reversed(self.undone)
+            ],
         }
 
     @classmethod
@@ -104,7 +127,8 @@ class Session:
         """Build a new session from save_data(). Raise ValueError if it is not valid."""
         if not isinstance(data, dict) or data.get("format") != SAVE_FORMAT:
             raise ValueError("That file is not a saved chess game")
-        if data.get("version") != SAVE_VERSION:
+        version = data.get("version")
+        if version not in (1, SAVE_VERSION):
             raise ValueError("Unsupported save version")
         opponent: Any = data.get("opponent")
         session = cls(opponent)
@@ -118,8 +142,19 @@ class Session:
             for before, after, label in zip(history, history[1:], notation):
                 if move_between(before, after) != label:
                     raise ValueError(f"{label!r} does not lead to the next position")
-        except (ValueError, TypeError) as error:
+            redo = [] if version == 1 else saved_list(data, "redo")
+            undone = []
+            previous = history[-1]
+            for entry in redo:
+                position = saved_position(entry)
+                label = entry["notation"]
+                if move_between(previous, position) != label:
+                    raise ValueError(f"Redo {label!r} does not follow the game")
+                undone.append((position, label))
+                previous = position
+        except (ValueError, TypeError, KeyError) as error:
             raise ValueError(f"The saved game is not valid: {error}") from None
+        session.undone = list(reversed(undone))
         session.history = history
         session.notation = notation
         session.position = copy_position(history[-1])
@@ -176,6 +211,8 @@ class Session:
                 self.play(source, target)
         elif command == "undo":
             self.undo()
+        elif command == "redo":
+            self.redo()
         else:
             raise ValueError("Unknown action")
         return self.view()
