@@ -29,25 +29,37 @@ To reach promotion quickly from a new game, play a2-a4, h7-h5, a4-a5, h5-h4, a5-
 h4-h3, a6-b7, h3-g2. White can then play b7 to a8. In tests, the `promotion-setup` action
 plays the same moves.
 
+## Undo
+
+**Undo last move** (or Ctrl+Z) takes back the most recent move, restoring the board, any captured piece,
+the side to move and the move list. At the start of a game it does nothing. Against the
+computer it takes back moves until it is White's turn again, so your move and the
+computer's reply are undone together.
+
+Shared game information: `Session.history` is a list of positions. `history[0]` is the
+starting position and `history[i + 1]` is the position after `notation[i]`. Save/load should
+store `history`, `notation` and `opponent`; redo can keep the positions that undo removes.
+
 ## Saving and loading
 
 **Save game** downloads the current game as a `.save.json` file; **Load game** opens one and
 replaces the current game, including whether the opponent is a person or the computer. The
-file is versioned JSON:
+file is versioned JSON holding `Session.history` and `Session.notation`, so moves made
+before saving can still be undone after loading:
 
 ```json
 {"format": "chess-workshop-save", "version": 1, "opponent": "computer",
- "moves": [{"source": "e2", "target": "e4"}, {"source": "e7", "target": "e5"}],
- "redo": [],
- "board": {"e4": "wP", "...": "..."}, "turn": "w"}
+ "notation": ["e2-e4"],
+ "history": [{"board": {"e2": "wP", "...": "..."}, "turn": "w"},
+             {"board": {"e4": "wP", "...": "..."}, "turn": "b"}]}
 ```
 
-`moves` lists every move from the starting position, so moves made before saving can still
-be undone after loading. `redo` lists undone moves that can be played again, next one first.
-Loading replays `moves` with the normal rules and checks that the result matches `board`
-and `turn`; an unreadable, illegal or inconsistent file is rejected and the current game
-stays as it was. In Python, `Session.save_data()` / `Session.from_save(data)` and
-`save_file(session, path)` / `load_file(path)` in `session.py` do the same.
+Loading checks that the history starts at the starting position and that each position
+follows from the one before by the legal move named in `notation`. An unreadable, illegal
+or inconsistent file is rejected and the current game stays as it was. In Python,
+`Session.save_data()` / `Session.from_save(data)` and `save_file(session, path)` /
+`load_file(path)` in `session.py` do the same. When redo is added, store its positions in
+the file too and raise the version.
 
 ## Files
 

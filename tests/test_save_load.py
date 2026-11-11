@@ -1,4 +1,5 @@
 import json
+import random
 import threading
 import urllib.error
 import urllib.request
@@ -8,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from game import copy_position, move, new_position
+from game import copy_position, new_position
 from server import make_server
 from session import SAVE_FORMAT, SAVE_VERSION, Session, load_file, save_file
 
@@ -18,10 +19,15 @@ def play(session: Session, *moves: tuple[str, str]) -> None:
         session.dispatch({"action": "move", "source": source, "target": target})
 
 
+def reload(session: Session) -> Session:
+    """Save and load through JSON text, as the browser does."""
+    return Session.from_save(json.loads(json.dumps(session.save_data())))
+
+
 def same_game(a: Session, b: Session) -> None:
     assert a.view() == b.view()
     assert a.history == b.history
-    assert a.redo == b.redo
+    assert a.position == b.position
 
 
 def test_new_game_round_trip() -> None:
@@ -29,10 +35,11 @@ def test_new_game_round_trip() -> None:
     data = session.save_data()
     assert data["format"] == SAVE_FORMAT
     assert data["version"] == SAVE_VERSION
-    assert data["moves"] == [] and data["redo"] == []
-    loaded = Session.from_save(data)
+    assert data["notation"] == []
+    assert data["history"] == [{"board": new_position()[0], "turn": "w"}]
+    loaded = reload(session)
     same_game(session, loaded)
-    assert loaded.position == new_position()
+    assert loaded.view()["can_undo"] is False
 
 
 def test_mid_game_with_capture_survives_a_file_and_a_fresh_instance(
@@ -42,14 +49,13 @@ def test_mid_game_with_capture_survives_a_file_and_a_fresh_instance(
     play(session, ("e2", "e4"), ("d7", "d5"), ("e4", "d5"))
     path = tmp_path / "game.save.json"
     save_file(session, path)
-    assert json.loads(path.read_text())["turn"] == "b"
+    assert json.loads(path.read_text())["history"][-1]["turn"] == "b"
 
     loaded = load_file(path)
     same_game(session, loaded)
     assert loaded.view()["moves"] == ["e2-e4", "d7-d5", "e4xd5"]
     assert loaded.position[0]["d5"] == "wP"
     assert len(loaded.position[0]) == 31
-    assert loaded.position[1] == "b"
     # The loaded game continues normally.
     play(loaded, ("d8", "d5"))
     assert loaded.view()["moves"][-1] == "d8xd5"
@@ -58,7 +64,7 @@ def test_mid_game_with_capture_survives_a_file_and_a_fresh_instance(
 def test_check_survives_loading() -> None:
     session = Session()
     play(session, ("e2", "e4"), ("f7", "f6"), ("d1", "h5"))
-    loaded = Session.from_save(session.save_data())
+    loaded = reload(session)
     assert loaded.view()["status"] == "check"
     assert loaded.view()["moves"][-1] == "d1-h5+"
 
@@ -67,7 +73,7 @@ def test_computer_opponent_is_restored() -> None:
     session = Session()
     session.dispatch({"action": "new", "opponent": "computer"})
     play(session, ("e2", "e4"))
-    loaded = Session.from_save(session.save_data())
+    loaded = reload(session)
     assert loaded.view()["opponent"] == "computer"
     assert loaded.computer_to_move()
     with pytest.raises(ValueError):
@@ -79,67 +85,99 @@ def test_computer_opponent_is_restored() -> None:
 def test_two_player_game_stays_two_player() -> None:
     session = Session()
     play(session, ("e2", "e4"))
-    loaded = Session.from_save(session.save_data())
+    loaded = reload(session)
     assert loaded.view()["opponent"] == "human"
     with pytest.raises(ValueError):
         loaded.dispatch({"action": "computer-move"})
 
 
-def test_history_allows_undoing_moves_made_before_saving() -> None:
+def test_undo_after_loading_restores_a_captured_piece() -> None:
     session = Session()
     play(session, ("g1", "f3"), ("b8", "c6"), ("f3", "e5"), ("c6", "e5"))
-    loaded = Session.from_save(session.save_data())
-    assert loaded.history == [("g1", "f3"), ("b8", "c6"), ("f3", "e5"), ("c6", "e5")]
-    # Replaying all but the last move gives the position before it, captured knight included.
-    earlier = new_position()
-    for source, target in loaded.history[:-1]:
-        move(earlier, source, target)
-    assert earlier[0]["e5"] == "wN"
-    assert earlier[1] == "b"
+    loaded = reload(session)
+    assert loaded.view()["can_undo"] is True
+    loaded.dispatch({"action": "undo"})
+    assert loaded.position[0]["e5"] == "wN"
+    assert loaded.position[0]["c6"] == "bN"
+    assert loaded.view()["turn"] == "b"
+    assert loaded.view()["moves"] == ["g1-f3", "b8-c6", "f3-e5"]
+    # Every move made before saving can be undone.
+    for _ in range(3):
+        loaded.dispatch({"action": "undo"})
+    assert loaded.position == new_position()
+    assert loaded.view()["can_undo"] is False
 
 
-def test_redo_moves_are_saved_and_restored() -> None:
+def test_undo_after_loading_against_the_computer_returns_to_white() -> None:
+    random.seed(3)
+    session = Session("computer")
+    for move in (("e2", "e4"), ("d2", "d4")):
+        play(session, move)
+        session.dispatch({"action": "computer-move"})
+    after_first_round = copy_position(session.history[2])
+    loaded = reload(session)
+    view = loaded.dispatch({"action": "undo"})
+    assert loaded.position == after_first_round
+    assert view["turn"] == "w"
+    assert len(view["moves"]) == 2
+
+
+def test_save_after_undo_stores_the_current_continuation() -> None:
+    session = Session()
+    play(session, ("e2", "e4"), ("e7", "e5"), ("d2", "d4"))
+    session.dispatch({"action": "undo"})
+    loaded = reload(session)
+    same_game(session, loaded)
+    assert loaded.view()["moves"] == ["e2-e4", "e7-e5"]
+    assert len(loaded.history) == 3
+    play(loaded, ("g1", "f3"))
+    assert loaded.view()["moves"] == ["e2-e4", "e7-e5", "g1-f3"]
+
+
+def test_loaded_positions_are_independent_of_each_other() -> None:
     session = Session()
     play(session, ("e2", "e4"))
-    session.redo = [("e7", "e5"), ("g1", "f3")]
-    data = session.save_data()
-    assert data["redo"] == [
-        {"source": "e7", "target": "e5"},
-        {"source": "g1", "target": "f3"},
-    ]
-    assert Session.from_save(data).redo == [("e7", "e5"), ("g1", "f3")]
+    loaded = reload(session)
+    play(loaded, ("e7", "e5"))
+    loaded.dispatch({"action": "undo"})
+    assert loaded.position[0].get("e7") == "bP"
+    assert "e5" not in loaded.position[0]
 
 
 def test_promotion_setup_game_round_trip() -> None:
     session = Session()
     session.dispatch({"action": "promotion-setup"})
-    same_game(session, Session.from_save(session.save_data()))
+    same_game(session, reload(session))
 
 
 def test_load_action_replaces_the_game_and_new_game_clears_it() -> None:
     source = Session()
     source.dispatch({"action": "new", "opponent": "computer"})
     play(source, ("e2", "e4"))
-    saved = source.dispatch({"action": "save"})["save"]
-    # Through JSON, as the browser sends it.
-    saved = json.loads(json.dumps(saved))
+    saved = json.loads(json.dumps(source.dispatch({"action": "save"})["save"]))
 
     target = Session()
     play(target, ("d2", "d4"), ("d7", "d5"))
     view = target.dispatch({"action": "load", "game": saved})
     assert view["moves"] == ["e2-e4"]
     assert view["opponent"] == "computer"
+    assert view["can_undo"] is True
     target.dispatch({"action": "new"})
-    assert target.history == [] and target.redo == []
+    assert target.history == [new_position()]
     assert target.position == new_position()
 
 
 def corrupt(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
     session = Session()
     play(session, ("e2", "e4"), ("e7", "e5"))
-    data = session.save_data()
+    data: dict[str, Any] = json.loads(json.dumps(session.save_data()))
     change(data)
     return data
+
+
+def board(data: dict[str, Any], index: int) -> dict[str, str]:
+    result: dict[str, str] = data["history"][index]["board"]
+    return result
 
 
 @pytest.mark.parametrize(
@@ -152,16 +190,25 @@ def corrupt(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
         corrupt(lambda d: d.update(format="something-else")),
         corrupt(lambda d: d.update(version=99)),
         corrupt(lambda d: d.update(opponent="robot")),
-        corrupt(lambda d: d.update(moves="e2e4")),
-        corrupt(lambda d: d.update(moves=[["e2", "e4"]])),
-        corrupt(lambda d: d["moves"].append({"source": "e1", "target": "e5"})),
-        corrupt(lambda d: d["moves"].append({"source": "z9"})),
-        corrupt(lambda d: d.pop("moves")),
-        corrupt(lambda d: d["board"].update(e4="wQ")),
-        corrupt(lambda d: d.update(turn="b")),
-        corrupt(lambda d: d.pop("board")),
-        corrupt(lambda d: d.update(redo=[{"source": "e5", "target": "e4"}])),
-        corrupt(lambda d: d.update(redo={"source": "g1", "target": "f3"})),
+        corrupt(lambda d: d.pop("history")),
+        corrupt(lambda d: d.pop("notation")),
+        corrupt(lambda d: d.update(history=[])),
+        corrupt(lambda d: d.update(history="e2e4")),
+        corrupt(lambda d: d["history"].append(["board", "w"])),
+        corrupt(lambda d: d["history"][1].update(board=None)),
+        corrupt(lambda d: d["history"][1].update(turn="x")),
+        corrupt(lambda d: board(d, 2).update(z9="bP")),
+        corrupt(lambda d: board(d, 2).update(a3="bX")),
+        corrupt(lambda d: board(d, 0).pop("a1")),
+        corrupt(lambda d: board(d, 2).update(e4="wQ")),
+        corrupt(lambda d: d["history"][2].update(turn="b")),
+        corrupt(lambda d: d["history"].pop()),
+        corrupt(lambda d: d["notation"].pop()),
+        corrupt(lambda d: d.update(notation=["e2-e4", "e7-e6"])),
+        corrupt(lambda d: d.update(notation=["e2-e4", 5])),
+        # Two moves at once, and an illegal knight jump.
+        corrupt(lambda d: d["history"].pop(1) and d["notation"].pop(0)),
+        corrupt(lambda d: board(d, 2).update(e5="bN", g8="bP")),
     ],
 )
 def test_invalid_saves_are_rejected_and_leave_the_game_unchanged(data: object) -> None:
@@ -170,7 +217,7 @@ def test_invalid_saves_are_rejected_and_leave_the_game_unchanged(data: object) -
     before = (
         copy_position(session.position),
         list(session.notation),
-        list(session.history),
+        [copy_position(position) for position in session.history],
         session.opponent,
     )
     with pytest.raises(ValueError):
@@ -198,7 +245,7 @@ def test_missing_file_is_rejected(tmp_path: Path) -> None:
         load_file(tmp_path / "missing.save.json")
 
 
-def test_save_and_load_over_http() -> None:
+def test_save_load_and_undo_over_http() -> None:
     server = make_server(0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -217,11 +264,12 @@ def test_save_and_load_over_http() -> None:
         post({"action": "new"})
         view = post({"action": "load", "game": saved})
         assert view["moves"] == ["e2-e4"] and view["turn"] == "b"
+        assert post({"action": "undo"})["moves"] == []
         with pytest.raises(urllib.error.HTTPError) as error:
             post({"action": "load", "game": {"format": "nope"}})
         assert error.value.code == 400
         error.value.close()
-        assert post({"action": "save"})["save"]["moves"] == saved["moves"]
+        assert post({"action": "save"})["save"]["notation"] == []
     finally:
         server.shutdown()
         server.server_close()

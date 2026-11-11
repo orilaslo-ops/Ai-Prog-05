@@ -90,6 +90,7 @@ function render() {
     }
     return item;
   }));
+  document.querySelector('#undo').disabled = !state.can_undo;
   document.querySelector('#captured-panel').hidden = !Object.hasOwn(state, 'captured');
   const captured = state.captured || [];
   document.querySelector('#captured').replaceChildren(...captured.map(pieceGlyph));
@@ -150,8 +151,16 @@ document.querySelector('#controls').onclick = async event => {
   finally { busy = false; }
 };
 
+// Ctrl+Z (Cmd+Z on a Mac) presses Undo; a disabled button ignores the click.
+document.addEventListener('keydown', event => {
+  if (event.key.toLowerCase() !== 'z' || !(event.ctrlKey || event.metaKey)
+      || event.shiftKey || event.altKey || event.repeat) return;
+  event.preventDefault();
+  document.querySelector('#undo').click();
+});
+
 // Save downloads the game as a JSON file; load sends a chosen file back to the server,
-// which checks it by replaying its moves before replacing the current game.
+// which checks every saved position before replacing the current game.
 document.querySelector('#save').onclick = async () => {
   if (busy) return;
   busy = true;

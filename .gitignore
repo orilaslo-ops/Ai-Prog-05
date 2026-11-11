@@ -3,3 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.save.json
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
