@@ -43,7 +43,7 @@ class Session:
         self.history.append(copy_position(self.position))
         self.after_move()
 
-    def undo(self):
+    def undo(self) -> None:
         """Take back the last move. Against the computer, return to White's turn."""
         while len(self.history) > 1:
             self.history.pop()

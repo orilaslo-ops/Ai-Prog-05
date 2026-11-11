@@ -4,12 +4,12 @@ from game import copy_position, new_position
 from session import Session
 
 
-def play(session, *moves):
+def play(session: Session, *moves: tuple[str, str]) -> None:
     for source, target in moves:
         session.dispatch({"action": "move", "source": source, "target": target})
 
 
-def test_undo_at_the_beginning_does_nothing():
+def test_undo_at_the_beginning_does_nothing() -> None:
     session = Session()
     view = session.dispatch({"action": "undo"})
     assert session.position == new_position()
@@ -17,7 +17,7 @@ def test_undo_at_the_beginning_does_nothing():
     assert view["can_undo"] is False
 
 
-def test_undo_restores_board_turn_and_notation():
+def test_undo_restores_board_turn_and_notation() -> None:
     session = Session()
     play(session, ("e2", "e4"))
     assert session.view()["can_undo"] is True
@@ -28,7 +28,7 @@ def test_undo_restores_board_turn_and_notation():
     assert view["can_undo"] is False
 
 
-def test_undo_restores_a_captured_piece():
+def test_undo_restores_a_captured_piece() -> None:
     session = Session()
     play(session, ("e2", "e4"), ("d7", "d5"))
     before = copy_position(session.position)
@@ -42,7 +42,7 @@ def test_undo_restores_a_captured_piece():
     assert session.view()["moves"] == ["e2-e4", "d7-d5"]
 
 
-def test_repeated_undo_walks_back_to_the_start_one_move_at_a_time():
+def test_repeated_undo_walks_back_to_the_start_one_move_at_a_time() -> None:
     session = Session()
     play(session, ("e2", "e4"), ("e7", "e5"), ("g1", "f3"))
     session.dispatch({"action": "undo"})
@@ -60,7 +60,7 @@ def test_repeated_undo_walks_back_to_the_start_one_move_at_a_time():
     assert view["turn"] == "w"
 
 
-def test_repeated_undo_against_the_computer_reaches_the_start():
+def test_repeated_undo_against_the_computer_reaches_the_start() -> None:
     random.seed(2)
     session = Session("computer")
     for move in (("e2", "e4"), ("g1", "f3"), ("b1", "c3")):
@@ -77,7 +77,7 @@ def test_repeated_undo_against_the_computer_reaches_the_start():
     assert session.position == new_position()
 
 
-def test_a_different_move_after_undo_replaces_the_continuation():
+def test_a_different_move_after_undo_replaces_the_continuation() -> None:
     session = Session()
     play(session, ("e2", "e4"))
     session.dispatch({"action": "undo"})
@@ -88,7 +88,7 @@ def test_a_different_move_after_undo_replaces_the_continuation():
     assert len(session.history) == 2
 
 
-def test_undo_keeps_the_position_independent_of_history():
+def test_undo_keeps_the_position_independent_of_history() -> None:
     session = Session()
     play(session, ("e2", "e4"), ("e7", "e5"))
     session.dispatch({"action": "undo"})
@@ -98,7 +98,7 @@ def test_undo_keeps_the_position_independent_of_history():
     assert "d5" not in session.position[0]
 
 
-def test_undo_against_the_computer_takes_back_its_reply_too():
+def test_undo_against_the_computer_takes_back_its_reply_too() -> None:
     random.seed(0)
     session = Session("computer")
     play(session, ("e2", "e4"))
@@ -110,7 +110,7 @@ def test_undo_against_the_computer_takes_back_its_reply_too():
     assert view["moves"] == []
 
 
-def test_undo_against_the_computer_before_it_replies():
+def test_undo_against_the_computer_before_it_replies() -> None:
     session = Session("computer")
     play(session, ("e2", "e4"))
     view = session.dispatch({"action": "undo"})
@@ -118,7 +118,7 @@ def test_undo_against_the_computer_before_it_replies():
     assert view["turn"] == "w"
 
 
-def test_undo_against_the_computer_returns_to_the_players_turn_mid_game():
+def test_undo_against_the_computer_returns_to_the_players_turn_mid_game() -> None:
     random.seed(1)
     session = Session("computer")
     for source, target in (("e2", "e4"), ("d2", "d4")):
@@ -131,7 +131,7 @@ def test_undo_against_the_computer_returns_to_the_players_turn_mid_game():
     assert len(session.view()["moves"]) == 2
 
 
-def test_new_game_clears_undo_history():
+def test_new_game_clears_undo_history() -> None:
     session = Session()
     play(session, ("e2", "e4"))
     view = session.dispatch({"action": "new"})
@@ -141,7 +141,7 @@ def test_new_game_clears_undo_history():
     assert session.position == new_position()
 
 
-def test_promotion_setup_moves_can_be_undone():
+def test_promotion_setup_moves_can_be_undone() -> None:
     session = Session()
     session.dispatch({"action": "promotion-setup"})
     session.dispatch({"action": "undo"})
