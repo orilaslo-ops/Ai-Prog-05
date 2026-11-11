@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from computer import choose_move
+from captured import missing_pieces
 from game import (
     Position,
     coordinates,
@@ -48,6 +49,7 @@ class Session:
             raise ValueError("Unknown opponent")
         self.position = new_position()
         self.notation: list[str] = []
+        self.captured: list[str] = []
         self.opponent = opponent
         # Shared game information: history[0] is the start and history[i + 1] is the
         # position after notation[i]. Undo, redo and save/load all build on this list.
@@ -70,7 +72,7 @@ class Session:
         self.after_move()
 
     def after_move(self) -> None:
-        pass
+        self.captured = missing_pieces(self.position)
 
     def view(self) -> dict[str, Any]:
         return {
@@ -135,7 +137,7 @@ class Session:
         )
 
     def sidebar(self) -> dict[str, Any]:
-        return {}
+        return {"captured": self.captured}
 
     def dispatch(self, action: dict[str, Any]) -> dict[str, Any]:
         command = action.get("action")
