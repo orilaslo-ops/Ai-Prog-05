@@ -105,3 +105,42 @@ non-starting rank, computer stalemate handling, the static routes and all of `ap
    checkmate or stalemate loads with the right status and winner.
 5. **The computer and stalemate**: when winning, the computer prefers a capture to a
    stalemating move. Use a fixed `random.Random` so the test is deterministic.
+
+## Update: after adding the recommended tests (branch tests/coverage-gaps)
+
+All five recommended tests were added: `tests/test_game.py` (pawn double-steps),
+`tests/test_computer.py` (stalemate scoring), `tests/test_game_over.py` (checkmate and
+stalemate with undo and load), `tests/test_server.py` (routes, errors, concurrency) and
+`tests/test_browser.py` (Playwright: promotion dialog, Esc, save/load, bad files).
+
+Bugs found:
+
+- **The server blocks on an idle connection.** A connection that opens and sends
+  nothing (a browser preconnect, or a tab left open over a restart) blocked every other
+  request. I committed the reproducing test first (070c910). The fix (86a34c4) gives
+  each connection its own thread with `ThreadingHTTPServer` and guards the shared game
+  with a lock.
+- The other new tests passed against the existing code: Esc does cancel the promotion,
+  pawns only double-step from their start rank, and the computer avoids stalemate. Those
+  behaviors were correct but untested; now a regression would fail a test.
+
+| Command | Result |
+|---|---|
+| `ruff check .` | All checks passed |
+| `ruff format --check .` | 19 files already formatted |
+| `mypy --strict .` | Success: no issues found in 16 source files |
+| `python -m pytest --cov --cov-branch --cov-report=term-missing` | 184 passed; 99% total (was 117 tests, 97%) |
+
+| File | Before | After | Still missed |
+|---|---|---|---|
+| computer.py | 96% | 100% | |
+| server.py | 55% | 85% | 73-83, the `__main__` block |
+| session.py | 98% | 99% | 157, "the computer has no move" (unreachable) |
+| tests/test_browser.py | | 98% | 26-27, the skip when Chromium is missing |
+
+Coverage now traces greenlets and threads (`[tool.coverage.run]` in `pyproject.toml`).
+Without that, the Playwright tests ran but showed up as uncovered.
+
+Re-running the 13 mutation spot-checks: **all 13 are caught**, including the 5 that were
+missed before (pawn double-step from any rank, stalemate scored as material, unknown
+paths served as the index, Esc still promoting, no load error message).
