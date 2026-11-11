@@ -14,6 +14,7 @@ from game import (
     legal_moves,
     move,
     new_position,
+    promotes,
     status,
     winner,
 )
@@ -55,8 +56,8 @@ class Session:
         # position after notation[i]. Undo, redo and save/load all build on this list.
         self.history = [copy_position(self.position)]
 
-    def play(self, source: str, target: str) -> None:
-        label = move(self.position, source, target)
+    def play(self, source: str, target: str, promotion: str | None = None) -> None:
+        label = move(self.position, source, target, promotion)
         self.notation.append(label)
         self.history.append(copy_position(self.position))
         self.after_move()
@@ -147,7 +148,7 @@ class Session:
         if command == "move":
             if self.computer_to_move():
                 raise ValueError("Wait for the computer's move")
-            self.play(source, target)
+            self.play(source, target, action.get("promotion"))
         elif command == "computer-move":
             if not self.computer_to_move():
                 raise ValueError("It is not the computer's turn")
@@ -156,7 +157,11 @@ class Session:
                 raise ValueError("The computer has no move")
             self.play(*choice)
         elif command == "legal":
-            return {"targets": legal_moves(self.position, source)}
+            targets = legal_moves(self.position, source)
+            return {
+                "targets": targets,
+                "promotions": [t for t in targets if promotes(self.position, source, t)],
+            }
         elif command == "new":
             Session.__init__(self, action.get("opponent", "human"))
         elif command == "save":

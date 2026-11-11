@@ -4,7 +4,15 @@ import random
 from collections.abc import Iterator
 from types import ModuleType
 
-from game import Position, copy_position, legal_moves, move, status
+from game import (
+    PROMOTION_PIECES,
+    Position,
+    copy_position,
+    legal_moves,
+    move,
+    promotes,
+    status,
+)
 
 VALUES = {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0}
 CHECKMATE = 1000
@@ -15,7 +23,11 @@ def candidate_moves(position: Position) -> Iterator[tuple[str, str]]:
     for source, piece in sorted(board.items()):
         if piece[0] == turn:
             for target in legal_moves(position, source):
-                yield (source, target)
+                if promotes(position, source, target):
+                    for piece in PROMOTION_PIECES:
+                        yield (source, target, piece)
+                else:
+                    yield (source, target)
 
 
 def evaluate(position: Position, side: str) -> int:
