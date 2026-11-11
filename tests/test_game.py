@@ -123,3 +123,24 @@ def test_promotion_setup_uses_real_moves() -> None:
     assert session.position[0]["b7"] == "wP"
     assert session.position[0]["g2"] == "bP"
     assert "a8" in legal_moves(session.position, "b7")
+
+
+@pytest.mark.parametrize(
+    "side,source,two_ahead",
+    [("w", "e3", "e5"), ("w", "a4", "a6"), ("b", "d6", "d4"), ("b", "h5", "h3")],
+)
+def test_pawns_double_step_only_from_their_starting_rank(
+    side: str, source: str, two_ahead: str
+) -> None:
+    position: Position = [{"a1": "wK", "h8": "bK", source: side + "P"}, side]
+    targets = legal_moves(position, source)
+    assert two_ahead not in targets
+    assert len(targets) == 1
+
+
+def test_double_step_from_the_start_after_other_moves() -> None:
+    position = new_position()
+    move(position, "e2", "e3")
+    move(position, "a7", "a6")
+    assert "e5" not in legal_moves(position, "e3")
+    assert set(legal_moves(position, "d2")) == {"d3", "d4"}

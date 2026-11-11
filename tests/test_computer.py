@@ -78,3 +78,19 @@ def test_new_game_resets_the_opponent() -> None:
     assert session.view()["opponent"] == "human"
     with pytest.raises(ValueError):
         session.dispatch({"action": "new", "opponent": "robot"})
+
+
+# White's king on a1 has no move if Black plays Ka3 or Qb3: both are stalemate.
+WINNING_BLACK = [{"a1": "wK", "a4": "bK", "b4": "bQ"}, "b"]
+
+
+def test_stalemate_scores_zero_whatever_the_material() -> None:
+    position = [{"a1": "wK", "a3": "bK", "b4": "bQ"}, "w"]
+    assert evaluate(position, "b") == 0
+    assert evaluate(position, "w") == 0
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_a_winning_computer_does_not_stalemate(seed: int) -> None:
+    choice = choose_move(WINNING_BLACK, random.Random(seed))
+    assert choice not in (("a4", "a3"), ("b4", "b3"))
