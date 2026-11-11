@@ -152,8 +152,12 @@ document.querySelector('#controls').onclick = async event => {
 };
 
 // Ctrl+Z (Cmd+Z on a Mac) presses Undo; a disabled button ignores the click.
+// event.code names the physical Z key, so the shortcut also works with a Hebrew (or
+// other non-Latin) keyboard layout, where event.key is a different letter; event.key
+// still covers layouts that put Z elsewhere.
 document.addEventListener('keydown', event => {
-  if (event.key.toLowerCase() !== 'z' || !(event.ctrlKey || event.metaKey)
+  const z = event.code === 'KeyZ' || event.key.toLowerCase() === 'z';
+  if (!z || !(event.ctrlKey || event.metaKey)
       || event.shiftKey || event.altKey || event.repeat) return;
   event.preventDefault();
   document.querySelector('#undo').click();
