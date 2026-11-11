@@ -29,6 +29,26 @@ To reach promotion quickly from a new game, play a2-a4, h7-h5, a4-a5, h5-h4, a5-
 h4-h3, a6-b7, h3-g2. White can then play b7 to a8. In tests, the `promotion-setup` action
 plays the same moves.
 
+## Saving and loading
+
+**Save game** downloads the current game as a `.save.json` file; **Load game** opens one and
+replaces the current game, including whether the opponent is a person or the computer. The
+file is versioned JSON:
+
+```json
+{"format": "chess-workshop-save", "version": 1, "opponent": "computer",
+ "moves": [{"source": "e2", "target": "e4"}, {"source": "e7", "target": "e5"}],
+ "redo": [],
+ "board": {"e4": "wP", "...": "..."}, "turn": "w"}
+```
+
+`moves` lists every move from the starting position, so moves made before saving can still
+be undone after loading. `redo` lists undone moves that can be played again, next one first.
+Loading replays `moves` with the normal rules and checks that the result matches `board`
+and `turn`; an unreadable, illegal or inconsistent file is rejected and the current game
+stays as it was. In Python, `Session.save_data()` / `Session.from_save(data)` and
+`save_file(session, path)` / `load_file(path)` in `session.py` do the same.
+
 ## Files
 
 - `game.py`: board and turn in a position list; movement, check, checkmate and stalemate.

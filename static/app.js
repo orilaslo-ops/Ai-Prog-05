@@ -150,6 +150,42 @@ document.querySelector('#controls').onclick = async event => {
   finally { busy = false; }
 };
 
+// Save downloads the game as a JSON file; load sends a chosen file back to the server,
+// which checks it by replaying its moves before replacing the current game.
+document.querySelector('#save').onclick = async () => {
+  if (busy) return;
+  busy = true;
+  try {
+    const {save} = await request({action: 'save'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(save, null, 2)], {type: 'application/json'}));
+    link.download = `chess-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.save.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    message.textContent = 'Game saved';
+  } catch (error) { message.textContent = error.message; }
+  finally { busy = false; }
+};
+
+const loadFile = document.querySelector('#load-file');
+document.querySelector('#load').onclick = () => { if (!busy) loadFile.click(); };
+loadFile.onchange = async () => {
+  const file = loadFile.files[0];
+  loadFile.value = '';
+  if (!file || busy) return;
+  busy = true;
+  try {
+    let game;
+    try { game = JSON.parse(await file.text()); }
+    catch { throw new Error('That file is not a saved chess game'); }
+    state = await request({action: 'load', game});
+    selected = null; targets = [];
+    message.textContent = 'Game loaded'; render();
+    await computerReply();
+  } catch (error) { message.textContent = error.message; }
+  finally { busy = false; }
+};
+
 try {
   const response = await fetch('/api/state');
   if (!response.ok) throw new Error('Could not load the game');
