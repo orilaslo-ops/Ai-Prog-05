@@ -173,5 +173,5 @@ def move(
         board[target] = piece[0] + promotion
     position[1] = other(position[1])
     suffix = {"check": "+", "checkmate": "#"}.get(status(position) or "", "")
-    chosen = "=" + promotion if promoting else ""
+    chosen = "=" + promotion if promoting and promotion else ""
     return source + ("x" if captured else "-") + target + chosen + suffix

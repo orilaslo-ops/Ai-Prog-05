@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from captured import missing_pieces
+from captured import captured_pieces
 from computer import choose_move
 from game import (
     Position,
@@ -73,7 +73,7 @@ class Session:
         self.after_move()
 
     def after_move(self) -> None:
-        self.captured = missing_pieces(self.position)
+        self.captured = captured_pieces(self.history)
 
     def view(self) -> dict[str, Any]:
         return {
@@ -160,7 +160,9 @@ class Session:
             targets = legal_moves(self.position, source)
             return {
                 "targets": targets,
-                "promotions": [t for t in targets if promotes(self.position, source, t)],
+                "promotions": [
+                    t for t in targets if promotes(self.position, source, t)
+                ],
             }
         elif command == "new":
             Session.__init__(self, action.get("opponent", "human"))
@@ -207,8 +209,11 @@ def move_between(before: Position, after: Position) -> str | None:
     changed = [square for square in new if old.get(square) != new[square]]
     if len(vacated) != 1 or len(changed) != 1:
         return None
+    source, target = vacated[0], changed[0]
+    # A pawn reaching the last rank names the piece it became.
+    promotion = new[target][1] if promotes(before, source, target) else None
     trial = copy_position(before)
-    label = move(trial, vacated[0], changed[0])
+    label = move(trial, source, target, promotion)
     return label if trial == after else None
 
 

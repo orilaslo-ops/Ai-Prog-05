@@ -18,7 +18,7 @@ VALUES = {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0}
 CHECKMATE = 1000
 
 
-def candidate_moves(position: Position) -> Iterator[tuple[str, str]]:
+def candidate_moves(position: Position) -> Iterator[tuple[str, ...]]:
     board, turn = position[:2]
     for source, piece in sorted(board.items()):
         if piece[0] == turn:
@@ -45,10 +45,10 @@ def evaluate(position: Position, side: str) -> int:
 
 def choose_move(
     position: Position, rng: random.Random | ModuleType = random
-) -> tuple[str, str] | None:
+) -> tuple[str, ...] | None:
     """Return the move with the best score after it, or None if there is no move."""
     side = position[1]
-    best: list[tuple[str, str]] = []
+    best: list[tuple[str, ...]] = []
     best_score: int | None = None
     for candidate in candidate_moves(position):
         trial = copy_position(position)
