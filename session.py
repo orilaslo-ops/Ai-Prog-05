@@ -1,5 +1,7 @@
 """Application actions and information shown beside the board."""
 
+from typing import Any
+
 from computer import choose_move
 from game import (
     legal_moves,
@@ -9,34 +11,37 @@ from game import (
     winner,
 )
 
-
 # Legal from the standard starting position under this game's rules.
 # Next move: b7-a8, capturing a rook and reaching the last rank.
 PROMOTION_SETUP = [
-    ("a2", "a4"), ("h7", "h5"),
-    ("a4", "a5"), ("h5", "h4"),
-    ("a5", "a6"), ("h4", "h3"),
-    ("a6", "b7"), ("h3", "g2"),
+    ("a2", "a4"),
+    ("h7", "h5"),
+    ("a4", "a5"),
+    ("h5", "h4"),
+    ("a5", "a6"),
+    ("h4", "h3"),
+    ("a6", "b7"),
+    ("h3", "g2"),
 ]
 
 
 class Session:
-    def __init__(self, opponent="human"):
+    def __init__(self, opponent: str = "human") -> None:
         if opponent not in ("human", "computer"):
             raise ValueError("Unknown opponent")
         self.position = new_position()
-        self.notation = []
+        self.notation: list[str] = []
         self.opponent = opponent
 
-    def play(self, source, target):
+    def play(self, source: str, target: str) -> None:
         label = move(self.position, source, target)
         self.notation.append(label)
         self.after_move()
 
-    def after_move(self):
+    def after_move(self) -> None:
         pass
 
-    def view(self):
+    def view(self) -> dict[str, Any]:
         return {
             "board": self.position[0],
             "turn": self.position[1],
@@ -47,29 +52,38 @@ class Session:
             **self.sidebar(),
         }
 
-    def computer_to_move(self):
-        return (self.opponent == "computer" and self.position[1] == "b"
-                and status(self.position) not in ("checkmate", "stalemate"))
+    def computer_to_move(self) -> bool:
+        return (
+            self.opponent == "computer"
+            and self.position[1] == "b"
+            and status(self.position) not in ("checkmate", "stalemate")
+        )
 
-    def sidebar(self):
+    def sidebar(self) -> dict[str, Any]:
         return {}
 
-    def dispatch(self, action):
+    def dispatch(self, action: dict[str, Any]) -> dict[str, Any]:
         command = action.get("action")
+        # Squares come from the request as sent; the game rules reject anything else.
+        source: Any = action.get("source")
+        target: Any = action.get("target")
         if command == "move":
             if self.computer_to_move():
                 raise ValueError("Wait for the computer's move")
-            self.play(action.get("source"), action.get("target"))
+            self.play(source, target)
         elif command == "computer-move":
             if not self.computer_to_move():
                 raise ValueError("It is not the computer's turn")
-            self.play(*choose_move(self.position))
+            choice = choose_move(self.position)
+            if choice is None:
+                raise ValueError("The computer has no move")
+            self.play(*choice)
         elif command == "legal":
-            return {"targets": legal_moves(self.position, action.get("source"))}
+            return {"targets": legal_moves(self.position, source)}
         elif command == "new":
-            self.__init__(action.get("opponent", "human"))
+            Session.__init__(self, action.get("opponent", "human"))
         elif command == "promotion-setup":
-            self.__init__()
+            Session.__init__(self)
             for source, target in PROMOTION_SETUP:
                 self.play(source, target)
         else:
