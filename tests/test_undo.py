@@ -54,6 +54,27 @@ def test_repeated_undo_walks_back_to_the_start_one_move_at_a_time():
     session.dispatch({"action": "undo"})
     assert session.position == new_position()
     assert session.view()["moves"] == []
+    view = session.dispatch({"action": "undo"})
+    assert session.position == new_position()
+    assert view["moves"] == []
+    assert view["turn"] == "w"
+
+
+def test_repeated_undo_against_the_computer_reaches_the_start():
+    random.seed(2)
+    session = Session("computer")
+    for move in (("e2", "e4"), ("g1", "f3"), ("b1", "c3")):
+        play(session, move)
+        session.dispatch({"action": "computer-move"})
+    lengths = []
+    while session.view()["can_undo"]:
+        view = session.dispatch({"action": "undo"})
+        assert view["turn"] == "w"
+        lengths.append(len(view["moves"]))
+    assert lengths == [4, 2, 0]
+    assert session.position == new_position()
+    session.dispatch({"action": "undo"})
+    assert session.position == new_position()
 
 
 def test_a_different_move_after_undo_replaces_the_continuation():
