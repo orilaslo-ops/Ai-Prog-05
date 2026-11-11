@@ -151,6 +151,14 @@ document.querySelector('#controls').onclick = async event => {
   finally { busy = false; }
 };
 
+// Ctrl+Z (Cmd+Z on a Mac) presses Undo; a disabled button ignores the click.
+document.addEventListener('keydown', event => {
+  if (event.key.toLowerCase() !== 'z' || !(event.ctrlKey || event.metaKey)
+      || event.shiftKey || event.altKey || event.repeat) return;
+  event.preventDefault();
+  document.querySelector('#undo').click();
+});
+
 try {
   const response = await fetch('/api/state');
   if (!response.ok) throw new Error('Could not load the game');

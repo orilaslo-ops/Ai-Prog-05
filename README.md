@@ -31,7 +31,7 @@ plays the same moves.
 
 ## Undo
 
-**Undo last move** takes back the most recent move, restoring the board, any captured piece,
+**Undo last move** (or Ctrl+Z) takes back the most recent move, restoring the board, any captured piece,
 the side to move and the move list. At the start of a game it does nothing. Against the
 computer it takes back moves until it is White's turn again, so your move and the
 computer's reply are undone together.
