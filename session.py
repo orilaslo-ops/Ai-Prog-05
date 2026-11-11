@@ -1,7 +1,9 @@
 """Application actions and information shown beside the board."""
 
 import json
+import os
 from pathlib import Path
+from typing import Any
 
 from computer import choose_move
 from game import (
@@ -12,7 +14,6 @@ from game import (
     status,
     winner,
 )
-
 
 # Legal from the standard starting position under this game's rules.
 # Next move: b7-a8, capturing a rook and reaching the last rank.
@@ -42,9 +43,9 @@ class Session:
         self.notation = []
         self.opponent = opponent
         # Every move played from the starting position, as (source, target).
-        self.history = []
+        self.history: list[tuple[str, str]] = []
         # Undone moves that can be played again, next one first. Saved with the game.
-        self.redo = []
+        self.redo: list[tuple[str, str]] = []
 
     def play(self, source, target):
         label = move(self.position, source, target)
@@ -66,7 +67,7 @@ class Session:
             **self.sidebar(),
         }
 
-    def save_data(self):
+    def save_data(self) -> dict[str, Any]:
         """Return the game as a JSON-ready dictionary."""
         return {
             "format": SAVE_FORMAT,
@@ -79,7 +80,7 @@ class Session:
         }
 
     @classmethod
-    def from_save(cls, data):
+    def from_save(cls, data: object) -> "Session":
         """Build a new session from save_data(). Raise ValueError if it is not valid."""
         if not isinstance(data, dict) or data.get("format") != SAVE_FORMAT:
             raise ValueError("That file is not a saved chess game")
@@ -93,15 +94,17 @@ class Session:
             trial = copy_position(session.position)
             for source, target in redo:
                 move(trial, source, target)
-        except ValueError as error:
+        except (ValueError, TypeError) as error:
             raise ValueError(f"The saved game is not valid: {error}") from None
-        if (data.get("board") != session.position[0]
-                or data.get("turn") != session.position[1]):
+        if (
+            data.get("board") != session.position[0]
+            or data.get("turn") != session.position[1]
+        ):
             raise ValueError("The saved board does not match its moves")
         session.redo = redo
         return session
 
-    def load(self, data):
+    def load(self, data: object) -> None:
         """Replace this game with a saved one; on error the current game is unchanged."""
         self.__dict__.update(type(self).from_save(data).__dict__)
 
@@ -139,24 +142,27 @@ class Session:
         return self.view()
 
 
-def saved_moves(entries):
+def saved_moves(entries: object) -> list[tuple[Any, Any]]:
+    """Read [{"source": ..., "target": ...}, ...] as (source, target) pairs."""
     if not isinstance(entries, list):
-        raise ValueError("Expected a list of moves")
+        raise TypeError("Expected a list of moves")
     moves = []
     for entry in entries:
         if not isinstance(entry, dict):
-            raise ValueError('Expected a move such as {"source": "e2", "target": "e4"}')
+            raise TypeError('Expected a move such as {"source": "e2", "target": "e4"}')
         moves.append((entry.get("source"), entry.get("target")))
     return moves
 
 
-def save_file(session, path):
+def save_file(session: Session, path: str | os.PathLike[str]) -> None:
     """Write the game to path as JSON."""
     text = json.dumps(session.save_data(), indent=2) + "\n"
     Path(path).write_text(text, encoding="utf-8")
 
 
-def load_file(path, session_class=Session):
+def load_file(
+    path: str | os.PathLike[str], session_class: type[Session] = Session
+) -> Session:
     """Read a game written by save_file into a new session."""
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))

@@ -2,6 +2,9 @@ import json
 import threading
 import urllib.error
 import urllib.request
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -10,18 +13,18 @@ from server import make_server
 from session import SAVE_FORMAT, SAVE_VERSION, Session, load_file, save_file
 
 
-def play(session, *moves):
+def play(session: Session, *moves: tuple[str, str]) -> None:
     for source, target in moves:
         session.dispatch({"action": "move", "source": source, "target": target})
 
 
-def same_game(a, b):
+def same_game(a: Session, b: Session) -> None:
     assert a.view() == b.view()
     assert a.history == b.history
     assert a.redo == b.redo
 
 
-def test_new_game_round_trip():
+def test_new_game_round_trip() -> None:
     session = Session()
     data = session.save_data()
     assert data["format"] == SAVE_FORMAT
@@ -32,7 +35,9 @@ def test_new_game_round_trip():
     assert loaded.position == new_position()
 
 
-def test_mid_game_with_capture_survives_a_file_and_a_fresh_instance(tmp_path):
+def test_mid_game_with_capture_survives_a_file_and_a_fresh_instance(
+    tmp_path: Path,
+) -> None:
     session = Session()
     play(session, ("e2", "e4"), ("d7", "d5"), ("e4", "d5"))
     path = tmp_path / "game.save.json"
@@ -50,7 +55,7 @@ def test_mid_game_with_capture_survives_a_file_and_a_fresh_instance(tmp_path):
     assert loaded.view()["moves"][-1] == "d8xd5"
 
 
-def test_check_survives_loading():
+def test_check_survives_loading() -> None:
     session = Session()
     play(session, ("e2", "e4"), ("f7", "f6"), ("d1", "h5"))
     loaded = Session.from_save(session.save_data())
@@ -58,7 +63,7 @@ def test_check_survives_loading():
     assert loaded.view()["moves"][-1] == "d1-h5+"
 
 
-def test_computer_opponent_is_restored():
+def test_computer_opponent_is_restored() -> None:
     session = Session()
     session.dispatch({"action": "new", "opponent": "computer"})
     play(session, ("e2", "e4"))
@@ -71,7 +76,7 @@ def test_computer_opponent_is_restored():
     assert view["turn"] == "w" and len(view["moves"]) == 2
 
 
-def test_two_player_game_stays_two_player():
+def test_two_player_game_stays_two_player() -> None:
     session = Session()
     play(session, ("e2", "e4"))
     loaded = Session.from_save(session.save_data())
@@ -80,7 +85,7 @@ def test_two_player_game_stays_two_player():
         loaded.dispatch({"action": "computer-move"})
 
 
-def test_history_allows_undoing_moves_made_before_saving():
+def test_history_allows_undoing_moves_made_before_saving() -> None:
     session = Session()
     play(session, ("g1", "f3"), ("b8", "c6"), ("f3", "e5"), ("c6", "e5"))
     loaded = Session.from_save(session.save_data())
@@ -93,23 +98,25 @@ def test_history_allows_undoing_moves_made_before_saving():
     assert earlier[1] == "b"
 
 
-def test_redo_moves_are_saved_and_restored():
+def test_redo_moves_are_saved_and_restored() -> None:
     session = Session()
     play(session, ("e2", "e4"))
     session.redo = [("e7", "e5"), ("g1", "f3")]
     data = session.save_data()
-    assert data["redo"] == [{"source": "e7", "target": "e5"},
-                            {"source": "g1", "target": "f3"}]
+    assert data["redo"] == [
+        {"source": "e7", "target": "e5"},
+        {"source": "g1", "target": "f3"},
+    ]
     assert Session.from_save(data).redo == [("e7", "e5"), ("g1", "f3")]
 
 
-def test_promotion_setup_game_round_trip():
+def test_promotion_setup_game_round_trip() -> None:
     session = Session()
     session.dispatch({"action": "promotion-setup"})
     same_game(session, Session.from_save(session.save_data()))
 
 
-def test_load_action_replaces_the_game_and_new_game_clears_it():
+def test_load_action_replaces_the_game_and_new_game_clears_it() -> None:
     source = Session()
     source.dispatch({"action": "new", "opponent": "computer"})
     play(source, ("e2", "e4"))
@@ -127,7 +134,7 @@ def test_load_action_replaces_the_game_and_new_game_clears_it():
     assert target.position == new_position()
 
 
-def corrupt(change):
+def corrupt(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
     session = Session()
     play(session, ("e2", "e4"), ("e7", "e5"))
     data = session.save_data()
@@ -135,58 +142,72 @@ def corrupt(change):
     return data
 
 
-@pytest.mark.parametrize("data", [
-    None,
-    [],
-    "text",
-    {},
-    corrupt(lambda d: d.update(format="something-else")),
-    corrupt(lambda d: d.update(version=99)),
-    corrupt(lambda d: d.update(opponent="robot")),
-    corrupt(lambda d: d.update(moves="e2e4")),
-    corrupt(lambda d: d.update(moves=[["e2", "e4"]])),
-    corrupt(lambda d: d["moves"].append({"source": "e1", "target": "e5"})),
-    corrupt(lambda d: d["moves"].append({"source": "z9"})),
-    corrupt(lambda d: d.pop("moves")),
-    corrupt(lambda d: d["board"].update(e4="wQ")),
-    corrupt(lambda d: d.update(turn="b")),
-    corrupt(lambda d: d.pop("board")),
-    corrupt(lambda d: d.update(redo=[{"source": "e5", "target": "e4"}])),
-    corrupt(lambda d: d.update(redo={"source": "g1", "target": "f3"})),
-])
-def test_invalid_saves_are_rejected_and_leave_the_game_unchanged(data):
+@pytest.mark.parametrize(
+    "data",
+    [
+        None,
+        [],
+        "text",
+        {},
+        corrupt(lambda d: d.update(format="something-else")),
+        corrupt(lambda d: d.update(version=99)),
+        corrupt(lambda d: d.update(opponent="robot")),
+        corrupt(lambda d: d.update(moves="e2e4")),
+        corrupt(lambda d: d.update(moves=[["e2", "e4"]])),
+        corrupt(lambda d: d["moves"].append({"source": "e1", "target": "e5"})),
+        corrupt(lambda d: d["moves"].append({"source": "z9"})),
+        corrupt(lambda d: d.pop("moves")),
+        corrupt(lambda d: d["board"].update(e4="wQ")),
+        corrupt(lambda d: d.update(turn="b")),
+        corrupt(lambda d: d.pop("board")),
+        corrupt(lambda d: d.update(redo=[{"source": "e5", "target": "e4"}])),
+        corrupt(lambda d: d.update(redo={"source": "g1", "target": "f3"})),
+    ],
+)
+def test_invalid_saves_are_rejected_and_leave_the_game_unchanged(data: object) -> None:
     session = Session()
     play(session, ("d2", "d4"))
-    before = (copy_position(session.position), list(session.notation),
-              list(session.history), session.opponent)
+    before = (
+        copy_position(session.position),
+        list(session.notation),
+        list(session.history),
+        session.opponent,
+    )
     with pytest.raises(ValueError):
         session.dispatch({"action": "load", "game": data})
-    assert (session.position, session.notation, session.history,
-            session.opponent) == before
+    assert (
+        session.position,
+        session.notation,
+        session.history,
+        session.opponent,
+    ) == before
 
 
-@pytest.mark.parametrize("content", [b"not json", b"\xff\xfe\x00", b'{"format": 1}', b""])
-def test_unreadable_files_are_rejected(tmp_path, content):
+@pytest.mark.parametrize(
+    "content", [b"not json", b"\xff\xfe\x00", b'{"format": 1}', b""]
+)
+def test_unreadable_files_are_rejected(tmp_path: Path, content: bytes) -> None:
     path = tmp_path / "bad.save.json"
     path.write_bytes(content)
     with pytest.raises(ValueError):
         load_file(path)
 
 
-def test_missing_file_is_rejected(tmp_path):
+def test_missing_file_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         load_file(tmp_path / "missing.save.json")
 
 
-def test_save_and_load_over_http():
+def test_save_and_load_over_http() -> None:
     server = make_server(0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/api/action"
 
-    def post(action):
-        request = urllib.request.Request(url, json.dumps(action).encode(),
-                                         {"Content-Type": "application/json"})
+    def post(action: dict[str, Any]) -> Any:
+        request = urllib.request.Request(
+            url, json.dumps(action).encode(), {"Content-Type": "application/json"}
+        )
         with urllib.request.urlopen(request, timeout=5) as response:
             return json.loads(response.read())
 
